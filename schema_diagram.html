@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Schéma de la base de données</title>
+<style>
+:root{--bg:#f7f7f4;--card:#fff;--ink:#1f2328;--mute:#6b7178;--line:#7d838a;--bd:#d7d9d4;--a-bg:#2f6fdb;--a-ink:#fff;--b-bg:#c2610a;--b-ink:#fff;--c-bg:#2e8540;--c-ink:#fff}
+@media (prefers-color-scheme:dark){:root{--bg:#1b1c1e;--card:#25262a;--ink:#e6e6e3;--mute:#9a9da2;--line:#8a9097;--bd:#3a3c41;--a-bg:#3b7be6;--b-bg:#d9731a;--c-bg:#3a9a50}}
+*{box-sizing:border-box}
+body{margin:0;padding:16px;background:var(--bg);color:var(--ink);font:13px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif}
+.bar{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap}
+.bar span{color:var(--mute)}
+button{font:inherit;padding:6px 12px;border:1px solid var(--bd);border-radius:6px;background:var(--card);color:var(--ink);cursor:pointer}
+button:focus-visible{outline:2px solid var(--a-ink);outline-offset:2px}
+.key{display:flex;flex-wrap:wrap;gap:8px 20px;margin-bottom:12px;color:var(--mute);font-size:12px}
+.key i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-inline-end:6px;vertical-align:-2px;border:1px solid var(--bd)}
+.key b{font-weight:500;color:var(--ink);margin-inline-end:4px}
+#wrap{width:100%;overflow:hidden}
+#cv{position:relative;width:960px;transform-origin:0 0}
+svg{position:absolute;left:0;top:0;pointer-events:none}
+.ln{stroke:var(--line);fill:none;stroke-width:1.2}
+.lb{fill:var(--mute);font-size:11px}
+.t{position:absolute;width:240px;background:var(--card);border:1px solid var(--bd);border-radius:6px;overflow:hidden;user-select:none}
+.t h3{margin:0;padding:6px 10px;font-size:14px;font-weight:500;cursor:grab;touch-action:none}
+.t.drag h3{cursor:grabbing}
+.r{display:flex;justify-content:space-between;padding:0 10px;height:22px;align-items:center}
+.r span+span{font-size:11px;color:var(--mute)}
+.g-a h3{background:var(--a-bg);color:var(--a-ink)}
+.g-b h3{background:var(--b-bg);color:var(--b-ink)}
+.g-c h3{background:var(--c-bg);color:var(--c-ink)}
+.g-a{border-color:var(--a-bg)}
+.g-b{border-color:var(--b-bg)}
+.g-c{border-color:var(--c-bg)}
+</style>
+</head>
+<body>
+<div class="bar">
+  <span>Faites glisser l'en-tête d'une table pour la déplacer ; les liens la suivent.</span>
+  <button id="reset">Réinitialiser la disposition</button>
+</div>
+<div class="key">
+  <span><i style="background:var(--a-bg)"></i>Comptes et clients</span>
+  <span><i style="background:var(--b-bg)"></i>Commandes et notifications</span>
+  <span><i style="background:var(--c-bg)"></i>Journaux et sécurité</span>
+  <span><b>PK</b>clé primaire (identifiant)</span>
+  <span><b>FK</b>clé étrangère (lien vers une autre table)</span>
+  <span><b>UK</b>valeur unique</span>
+  <span><b>1</b>un</span>
+  <span><b>N</b>plusieurs</span>
+  <span><b>0..1</b>zéro ou un</span>
+</div>
+<div id="wrap"><div id="cv"></div></div>
+<script>
+// ===== عدّل الجداول والأعمدة هنا =====
+// g: لون المجموعة (a بنفسجي، b أخضر، c رمادي) | x,y: المكان | c: الأعمدة "اسم|وسم"
+const T = {
+  utilisateur:       {g:'a', x:360, y:20,  c:['id|PK','nom','prenom','telephone','email|UK','etat','derniere_activite','cree_le']},
+  administration:    {g:'a', x:360, y:290, c:['id|PK','id_utilisateur|FK UK','role','mot_de_passe']},
+  client:            {g:'a', x:360, y:470, c:['id|PK','id_utilisateur|FK','id_categorie|FK','autorisation','adresse','entreprise','code_acces|UK']},
+  commande:          {g:'b', x:360, y:720, c:['id|PK','id_client|FK','type','marque','modele','dimension','indice','quantite','prix_unitaire','total','statut','motif_refus','motif_annulation','traite_par|FK','traitee_le','cree_le']},
+  reset_token:       {g:'c', x:20,  y:290, c:['id|PK','token|UK','id_utilisateur|FK','expire_le','cree_le']},
+  categorie:         {g:'a', x:20,  y:480, c:['id|PK','nom|UK','remise_pct']},
+  journal_recherche: {g:'c', x:20,  y:620, c:['id|PK','id_client|FK','terme_recherche','cree_le']},
+  session:           {g:'c', x:700, y:20,  c:['id|PK','token|UK','id_utilisateur|FK','expire_le','cree_le']},
+  journal_connexion: {g:'c', x:700, y:190, c:['id|PK','id_utilisateur|FK','succes','cree_le']},
+  historique:        {g:'c', x:700, y:330, c:['id|PK','objet_type','objet_id','action','auteur_id|FK','ancienne_valeur','nouvelle_valeur','cree_le']},
+  notification:      {g:'b', x:700, y:720, c:['id|PK','id_destinataire|FK','id_commande|FK','message','lue','cree_le']}
+};
+// ===== العلاقات: [الجدول الأب, الجدول الابن, العمود في الابن, (جهة الأب), (جهة الابن)] =====
+const R = [
+  ['utilisateur','administration','id_utilisateur','1','0..1'],
+  ['utilisateur','client','id_utilisateur'],
+  ['utilisateur','notification','id_destinataire'],
+  ['utilisateur','session','id_utilisateur'],
+  ['utilisateur','journal_connexion','id_utilisateur'],
+  ['utilisateur','historique','auteur_id'],
+  ['administration','commande','traite_par'],
+  ['administration','reset_token','id_utilisateur'],
+  ['categorie','client','id_categorie'],
+  ['client','commande','id_client'],
+  ['client','journal_recherche','id_client'],
+  ['commande','notification','id_commande']
+];
+// ======================================
+
+const W = 240, NS = 'http://www.w3.org/2000/svg';
+const cv = document.getElementById('cv'), wrap = document.getElementById('wrap');
+const svg = document.createElementNS(NS, 'svg');
+cv.appendChild(svg);
+const els = {};
+let scale = 1;
+
+for (const n in T) {
+  const t = document.createElement('div');
+  t.className = 't g-' + T[n].g;
+  t.style.left = T[n].x + 'px';
+  t.style.top = T[n].y + 'px';
+  const h = document.createElement('h3');
+  h.textContent = n;
+  t.appendChild(h);
+  T[n].c.forEach(s => {
+    const [name, tag = ''] = s.split('|');
+    const r = document.createElement('div');
+    r.className = 'r';
+    r.dataset.c = name;
+    r.innerHTML = '<span></span><span></span>';
+    r.children[0].textContent = name;
+    r.children[1].textContent = tag;
+    t.appendChild(r);
+  });
+  cv.appendChild(t);
+  els[n] = t;
+}
+
+function box(n) {
+  const e = els[n];
+  return {l: e.offsetLeft, t: e.offsetTop, r: e.offsetLeft + e.offsetWidth, b: e.offsetTop + e.offsetHeight};
+}
+function rowY(n, col) {
+  const e = els[n], r = e.querySelector('[data-c="' + col + '"]');
+  return e.offsetTop + r.offsetTop + r.offsetHeight / 2;
+}
+function label(x, y, s) {
+  const t = document.createElementNS(NS, 'text');
+  t.setAttribute('class', 'lb');
+  t.setAttribute('x', x);
+  t.setAttribute('y', y);
+  t.textContent = s;
+  svg.appendChild(t);
+}
+function path(d) {
+  const p = document.createElementNS(NS, 'path');
+  p.setAttribute('class', 'ln');
+  p.setAttribute('d', d);
+  svg.appendChild(p);
+}
+
+function draw() {
+  svg.innerHTML = '';
+  let maxB = 0;
+  for (const n in els) maxB = Math.max(maxB, box(n).b);
+  cv.style.height = (maxB + 24) + 'px';
+  svg.setAttribute('width', 960);
+  svg.setAttribute('height', maxB + 24);
+  let bump = 0;
+  R.forEach(([p, c, col, pl = '1', cl = 'N'], i) => {
+    const P = box(p), C = box(c), py = P.t + 15, cy = rowY(c, col);
+    const off = ((i * 13) % 5 - 2) * 8;
+    if (P.r + 30 <= C.l) {
+      const m = (P.r + C.l) / 2 + off;
+      path(`M${P.r} ${py}H${m}V${cy}H${C.l}`);
+      label(P.r + 4, py - 6, pl); label(C.l - 22, cy - 6, cl);
+    } else if (C.r + 30 <= P.l) {
+      const m = (C.r + P.l) / 2 + off;
+      path(`M${P.l} ${py}H${m}V${cy}H${C.r}`);
+      label(P.l - 14, py - 6, pl); label(C.r + 4, cy - 6, cl);
+    } else {
+      const down = P.b <= C.t, x = (P.l + P.r) / 2;
+      const y1 = down ? P.b : P.t, y2 = down ? C.t : C.b;
+      const lo = Math.min(y1, y2), hi = Math.max(y1, y2);
+      const blocked = Object.keys(els).some(o => {
+        if (o === p || o === c) return false;
+        const O = box(o);
+        return O.l <= x && x <= O.r && O.t < hi && O.b > lo;
+      });
+      if (!blocked) {
+        path(`M${x} ${y1}V${y2}`);
+        label(x + 6, y1 + (down ? 14 : -6), pl); label(x + 6, y2 + (down ? -6 : 14), cl);
+      } else {
+        const bx = Math.max(P.r, C.r) + 20 + 10 * bump++;
+        path(`M${P.r} ${py}H${bx}V${cy}H${C.r}`);
+        label(P.r + 4, py - 6, pl); label(C.r + 4, cy - 6, cl);
+      }
+    }
+  });
+}
+
+function fit() {
+  scale = Math.min(1, wrap.clientWidth / 960);
+  cv.style.transform = 'scale(' + scale + ')';
+  wrap.style.height = (cv.offsetHeight * scale) + 'px';
+}
+
+let dr = null;
+cv.addEventListener('pointerdown', e => {
+  const h = e.target.closest('h3');
+  if (!h) return;
+  const t = h.parentNode;
+  dr = {t, sx: e.clientX, sy: e.clientY, l: t.offsetLeft, tp: t.offsetTop};
+  t.classList.add('drag');
+  h.setPointerCapture(e.pointerId);
+});
+cv.addEventListener('pointermove', e => {
+  if (!dr) return;
+  const l = Math.min(Math.max(0, dr.l + (e.clientX - dr.sx) / scale), 960 - W);
+  const tp = Math.max(0, dr.tp + (e.clientY - dr.sy) / scale);
+  dr.t.style.left = l + 'px';
+  dr.t.style.top = tp + 'px';
+  draw();
+});
+function endDrag() {
+  if (!dr) return;
+  dr.t.classList.remove('drag');
+  dr = null;
+  fit();
+}
+cv.addEventListener('pointerup', endDrag);
+cv.addEventListener('pointercancel', endDrag);
+
+document.getElementById('reset').addEventListener('click', () => {
+  for (const n in T) { els[n].style.left = T[n].x + 'px'; els[n].style.top = T[n].y + 'px'; }
+  draw(); fit();
+});
+window.addEventListener('resize', fit);
+draw(); fit();
+</script>
+</body>
+</html>
